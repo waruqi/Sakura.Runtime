@@ -128,7 +128,7 @@ eastl::shared_ptr<ftl::TaskCounter> SCookSystem::AddCookTask(skr_guid_t guid)
             SMutexLock lock(system->taskMutex);
             system->cooking.erase(guid);
         }
-        // SkrDelete(jobContext);
+        SkrDelete(jobContext);
     };
     scheduler.AddTask({ Task, jobContext }, ftl::TaskPriority::Normal, counter.get());
     scheduler.AddTask({ TearDownTask, jobContext }, ftl::TaskPriority::Normal);

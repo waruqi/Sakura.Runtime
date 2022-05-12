@@ -71,7 +71,7 @@ public:
         void setTaskStatus(SkrAsyncIOStatus value)
         {
             skr_atomic32_store_relaxed(&request->status, value);
-            if(callbacks[value] != nullptr)
+            if (callbacks[value] != nullptr)
                 callbacks[value](callback_datas[value]);
         }
     };
@@ -113,7 +113,7 @@ public:
     SMutex taskMutex;
     SThreadDesc threadItem = {};
     SThreadHandle serviceThread;
-    //eastl::deque<Task> tasks;
+    // eastl::deque<Task> tasks;
     moodycamel::ConcurrentQueue<Task> tasks;
     SAtomic32 _running_status /*SkrAsyncIOServiceStatus*/;
     SAtomic32 _thread_status = _SKR_IO_THREAD_STATUS_RUNNING /*IOThreadStatus*/;
@@ -145,14 +145,14 @@ void ioThreadTask_execute(skr::io::RAMServiceImpl* service)
         else // do sort
         {
             service->setRunningStatus(SKR_ASYNC_IO_SERVICE_STATUS_RUNNING);
-            //eastl::stable_sort(service->tasks.begin(), service->tasks.end());
+            // eastl::stable_sort(service->tasks.begin(), service->tasks.end());
         }
     }
     // do io work
     service->current.setTaskStatus(SKR_ASYNC_IO_STATUS_RAM_LOADING);
     auto vf = skr_vfs_fopen(service->current.vfs, service->current.path.c_str(),
     ESkrFileMode::SKR_FM_READ, ESkrFileCreation::SKR_FILE_CREATION_OPEN_EXISTING);
-    if(service->current.request->bytes == nullptr)
+    if (service->current.request->bytes == nullptr)
     {
         // allocate
         auto fsize = skr_vfs_fsize(vf);
@@ -198,7 +198,7 @@ void skr::io::RAMServiceImpl::request(skr_vfs_t* vfs, const skr_ram_io_t* info, 
     back.request->size = info->size;
     back.priority = info->priority;
     back.sub_priority = info->sub_priority;
-    for(uint32_t i = 0; i < SKR_ASYNC_IO_STATUS_COUNT; i++)
+    for (uint32_t i = 0; i < SKR_ASYNC_IO_STATUS_COUNT; i++)
     {
         back.callbacks[i] = info->callbacks[i];
         back.callback_datas[i] = info->callback_datas[i];
