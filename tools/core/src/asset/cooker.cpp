@@ -29,7 +29,7 @@ SCookSystem* GetCookSystem()
     return &instance;
 }
 SCookSystem::SCookSystem() noexcept
-    : taskMutex(&scheduler)
+    : taskMutex(&scheduler, 1000)
     , ioMutex(&scheduler)
 {
 
@@ -44,7 +44,8 @@ SCookSystem::~SCookSystem() noexcept
 {
     for (auto ioService : ioServices)
     {
-        if (ioService) skr::io::RAMService::destroy(ioService);
+        if (ioService) 
+            skr::io::RAMService::destroy(ioService);
     }
 }
 
