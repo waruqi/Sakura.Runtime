@@ -5,6 +5,7 @@
 #include "ftl/fibtex.h"
 #include "platform/configure.h"
 #include "platform/memory.h"
+#include "platform/vfs.h"
 #include "resource/config_resource.h"
 #include "json/reader.h"
 #include <mutex>
@@ -39,7 +40,7 @@ void* SJsonConfigImporter::Import(skr::io::RAMService* ioService, const SAssetRe
         return nullptr;
     }
 
-    ftl::AtomicFlag counter(&GetCookSystem()->scheduler);
+    ftl::AtomicFlag counter(&GetCookSystem()->GetScheduler());
     counter.Set();
     skr_ram_io_t ramIO = {};
     ramIO.bytes = nullptr;
@@ -54,10 +55,18 @@ void* SJsonConfigImporter::Import(skr::io::RAMService* ioService, const SAssetRe
     };
     ramIO.callback_datas[SKR_ASYNC_IO_STATUS_OK] = (void*)&counter;
     skr_async_io_request_t ioRequest = {};
-    ioService->request(record->project->vfs, &ramIO, &ioRequest);
-    GetCookSystem()->scheduler.WaitForCounter(&counter, true);
-    auto jsonString = simdjson::padded_string(ioRequest.bytes, ioRequest.size);
-    sakura_free(ioRequest.bytes);
+    // ioService->request(record->project->vfs, &ramIO, &ioRequest);
+    // GetCookSystem()->scheduler.WaitForCounter(&counter, true);
+    auto file = skr_vfs_fopen(record->project->vfs, u8Path.c_str(), SKR_FM_READ, SKR_FILE_CREATION_OPEN_EXISTING);
+    SKR_DEFER({ skr_vfs_fclose(file); });
+    auto size = skr_vfs_fsize(file);
+    auto buffer = (char*)sakura_malloc(size + 1);
+    skr_vfs_fread(file, buffer, 0, size);
+    buffer[size] = 0;
+    auto jsonString = simdjson::padded_string(buffer, size);
+    sakura_free(buffer);
+    // auto jsonString = simdjson::padded_string(ioRequest.bytes, ioRequest.size);
+    // sakura_free(ioRequest.bytes);
     simdjson::ondemand::parser parser;
     auto doc = parser.iterate(jsonString);
     skr_config_resource_t* resource = skr::resource::SConfigFactory::NewConfig(configType);

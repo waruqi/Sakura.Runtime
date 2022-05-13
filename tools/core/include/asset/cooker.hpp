@@ -58,22 +58,24 @@ struct TOOL_API SCookContext { // context per job
 struct TOOL_API SCookSystem {
     SCookSystem() noexcept;
     ~SCookSystem() noexcept;
-    ftl::TaskScheduler scheduler;
     void Initialize();
+    void Shutdown();
     eastl::shared_ptr<ftl::TaskCounter> AddCookTask(skr_guid_t resource);
     void* CookOrLoad(skr_guid_t resource);
     eastl::shared_ptr<ftl::TaskCounter> EnsureCooked(skr_guid_t resource);
     void RegisterCooker(skr_guid_t type, SCooker* cooker);
     void UnregisterCooker(skr_guid_t type);
+    ftl::TaskScheduler& GetScheduler();
     void WaitForAll();
     skr::flat_hash_map<skr_guid_t, SCooker*, skr::guid::hash> cookers;
     using CookingMap = skr::parallel_flat_hash_map<skr_guid_t, SCookContext*, skr::guid::hash>;
     CookingMap cooking;
-    ftl::TaskCounter mainCounter;
 
     class skr::io::RAMService* getIOService();
     static constexpr uint32_t ioServicesMaxCount = 32;
     class skr::io::RAMService* ioServices[ioServicesMaxCount];
+    ftl::TaskScheduler* scheduler;
+    ftl::TaskCounter* mainCounter;
 };
 TOOL_API SCookSystem* GetCookSystem();
 } // namespace skd::assetreflect

@@ -30,7 +30,6 @@ SCookSystem* GetCookSystem()
     return &instance;
 }
 SCookSystem::SCookSystem() noexcept
-    : mainCounter(&scheduler)
 {
     // skr_init_mutex(&taskMutex);
     for (auto& ioService : ioServices)
@@ -38,10 +37,24 @@ SCookSystem::SCookSystem() noexcept
 }
 void SCookSystem::Initialize()
 {
-    scheduler.Init();
+    scheduler = SkrNew<ftl::TaskScheduler>();
+    mainCounter = SkrNew<ftl::TaskCounter>(scheduler);
+    scheduler->Init();
+}
+void SCookSystem::Shutdown()
+{
+    SkrDelete(mainCounter);
+    SkrDelete(scheduler);
+    scheduler = nullptr;
+    mainCounter = nullptr;
+}
+ftl::TaskScheduler& SCookSystem::GetScheduler()
+{
+    return *scheduler;
 }
 SCookSystem::~SCookSystem() noexcept
 {
+    SKR_ASSERT(scheduler == nullptr);
     // skr_destroy_mutex(&taskMutex);
     for (auto ioService : ioServices)
     {
@@ -51,7 +64,7 @@ SCookSystem::~SCookSystem() noexcept
 }
 void SCookSystem::WaitForAll()
 {
-    scheduler.WaitForCounter(&mainCounter);
+    scheduler->WaitForCounter(mainCounter);
 }
 
 skr::io::RAMService* SCookSystem::getIOService()
@@ -100,7 +113,7 @@ eastl::shared_ptr<ftl::TaskCounter> SCookSystem::AddCookTask(skr_guid_t guid)
 
     jobContext->record = GetAssetRegistry()->GetAssetRecord(guid);
     jobContext->ioService = getIOService();
-    auto counter = eastl::make_shared<ftl::TaskCounter>(&scheduler);
+    auto counter = eastl::make_shared<ftl::TaskCounter>(scheduler);
     jobContext->counter = counter;
     auto Task = +[](ftl::TaskScheduler* scheduler, void* userdata) {
         SCookContext* jobContext = (SCookContext*)userdata;
@@ -137,14 +150,14 @@ eastl::shared_ptr<ftl::TaskCounter> SCookSystem::AddCookTask(skr_guid_t guid)
     auto TearDownTask = +[](ftl::TaskScheduler* scheduler, void* userdata) {
         SCookContext* jobContext = (SCookContext*)userdata;
         auto system = GetCookSystem();
-        system->scheduler.WaitForCounter(jobContext->counter.get());
+        system->scheduler->WaitForCounter(jobContext->counter.get());
         auto guid = jobContext->record->guid;
         system->cooking.erase_if(guid, [](SCookContext* context) { SkrDelete(context); return true; });
-        system->mainCounter.Decrement();
+        system->mainCounter->Decrement();
     };
-    mainCounter.Add(1);
-    scheduler.AddTask({ Task, jobContext }, ftl::TaskPriority::Normal, counter.get());
-    scheduler.AddTask({ TearDownTask, jobContext }, ftl::TaskPriority::Normal);
+    mainCounter->Add(1);
+    scheduler->AddTask({ Task, jobContext }, ftl::TaskPriority::Normal, counter.get());
+    scheduler->AddTask({ TearDownTask, jobContext }, ftl::TaskPriority::Normal);
     return counter;
 }
 
@@ -256,7 +269,7 @@ void* SCookSystem::CookOrLoad(skr_guid_t resource)
 {
     auto counter = EnsureCooked(resource);
     if (counter)
-        scheduler.WaitForCounter(counter.get());
+        scheduler->WaitForCounter(counter.get());
     SKR_UNIMPLEMENTED_FUNCTION();
     // LOAD
     return nullptr;
