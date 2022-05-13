@@ -31,7 +31,7 @@ SCookSystem* GetCookSystem()
 }
 SCookSystem::SCookSystem() noexcept
 {
-    // skr_init_mutex(&taskMutex);
+    skr_init_mutex(&ioMutex);
     for (auto& ioService : ioServices)
         ioService = nullptr;
 }
@@ -55,7 +55,7 @@ ftl::TaskScheduler& SCookSystem::GetScheduler()
 SCookSystem::~SCookSystem() noexcept
 {
     SKR_ASSERT(scheduler == nullptr);
-    // skr_destroy_mutex(&taskMutex);
+    skr_destroy_mutex(&ioMutex);
     for (auto ioService : ioServices)
     {
         if (ioService)
@@ -69,6 +69,7 @@ void SCookSystem::WaitForAll()
 
 skr::io::RAMService* SCookSystem::getIOService()
 {
+    SMutexLock lock(ioMutex);
     for (auto& ioService : ioServices)
     {
         // all used up

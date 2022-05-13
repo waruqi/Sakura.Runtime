@@ -70,7 +70,7 @@ struct TOOL_API SCookSystem {
     skr::flat_hash_map<skr_guid_t, SCooker*, skr::guid::hash> cookers;
     using CookingMap = skr::parallel_flat_hash_map<skr_guid_t, SCookContext*, skr::guid::hash>;
     CookingMap cooking;
-
+    SMutex ioMutex;
     class skr::io::RAMService* getIOService();
     static constexpr uint32_t ioServicesMaxCount = 32;
     class skr::io::RAMService* ioServices[ioServicesMaxCount];
