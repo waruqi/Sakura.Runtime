@@ -104,17 +104,7 @@ int main(int argc, char** argv)
         system.scheduler.WaitForCounter(&counter);
     }
     //----- wait
-    while (1)
-    {
-        eastl::shared_ptr<ftl::TaskCounter> counter;
-        {
-            SMutexLock lock(system.taskMutex);
-            if (system.cooking.empty())
-                break;
-            counter = system.cooking.begin()->second->counter;
-        }
-        system.scheduler.WaitForCounter(counter.get());
-    }
+    system.WaitForAll();
     moduleManager->destroy_module_graph();
     return 0;
     using namespace grpc;

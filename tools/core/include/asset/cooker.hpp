@@ -10,6 +10,7 @@
 #include "platform/configure.h"
 #include "platform/guid.h"
 #include "ftl/fibtex.h"
+#include "utils/hashmap.hpp"
 
 struct skr_vfs_t;
 namespace skr::io
@@ -64,9 +65,11 @@ struct TOOL_API SCookSystem {
     eastl::shared_ptr<ftl::TaskCounter> EnsureCooked(skr_guid_t resource);
     void RegisterCooker(skr_guid_t type, SCooker* cooker);
     void UnregisterCooker(skr_guid_t type);
+    void WaitForAll();
     skr::flat_hash_map<skr_guid_t, SCooker*, skr::guid::hash> cookers;
-    skr::flat_hash_map<skr_guid_t, SCookContext*, skr::guid::hash> cooking;
-    SMutex taskMutex;
+    using CookingMap = skr::parallel_flat_hash_map<skr_guid_t, SCookContext*, skr::guid::hash>;
+    CookingMap cooking;
+    ftl::TaskCounter mainCounter;
 
     class skr::io::RAMService* getIOService();
     static constexpr uint32_t ioServicesMaxCount = 32;

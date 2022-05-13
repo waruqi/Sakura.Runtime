@@ -30,8 +30,9 @@ SCookSystem* GetCookSystem()
     return &instance;
 }
 SCookSystem::SCookSystem() noexcept
+    : mainCounter(&scheduler)
 {
-    skr_init_mutex(&taskMutex);
+    // skr_init_mutex(&taskMutex);
     for (auto& ioService : ioServices)
         ioService = nullptr;
 }
@@ -41,12 +42,16 @@ void SCookSystem::Initialize()
 }
 SCookSystem::~SCookSystem() noexcept
 {
-    skr_destroy_mutex(&taskMutex);
+    // skr_destroy_mutex(&taskMutex);
     for (auto ioService : ioServices)
     {
         if (ioService)
             skr::io::RAMService::destroy(ioService);
     }
+}
+void SCookSystem::WaitForAll()
+{
+    scheduler.WaitForCounter(&mainCounter);
 }
 
 skr::io::RAMService* SCookSystem::getIOService()
@@ -82,12 +87,15 @@ eastl::shared_ptr<ftl::TaskCounter> SCookSystem::AddCookTask(skr_guid_t guid)
 {
     SCookContext* jobContext;
     {
-        SMutexLock lock(taskMutex);
-        auto iter = cooking.find(guid);
-        if (iter != cooking.end())
-            return iter->second->counter;
-        jobContext = SkrNew<SCookContext>();
-        cooking.insert(std::make_pair(guid, jobContext));
+        eastl::shared_ptr<ftl::TaskCounter> result;
+        cooking.lazy_emplace_l(
+        guid, [&](SCookContext* ctx) { result = ctx->counter; },
+        [&](const CookingMap::constructor& ctor) {
+            jobContext = SkrNew<SCookContext>();
+            ctor(guid, jobContext);
+        });
+        if (result)
+            return result;
     }
 
     jobContext->record = GetAssetRegistry()->GetAssetRecord(guid);
@@ -104,32 +112,37 @@ eastl::shared_ptr<ftl::TaskCounter> SCookSystem::AddCookTask(skr_guid_t guid)
         auto system = GetCookSystem();
         auto iter = system->cookers.find(metaAsset->type);
         SKR_ASSERT(iter != system->cookers.end()); // TODO: error handling
-        iter->second->Cook(jobContext);
-        // write dependencies
-        auto dependencyPath = metaAsset->project->dependencyPath / fmt::format("{}.d", metaAsset->guid);
-        skr_json_writer_t writer(2);
-        writer.StartObject();
-        writer.Key("files");
-        writer.StartArray();
-        for (auto& dep : jobContext->staticDependencies)
-            skr::json::Write<const skr_guid_t&>(&writer, dep);
-        writer.EndArray();
-        writer.EndObject();
-        auto file = fopen(dependencyPath.u8string().c_str(), "w");
-        SKR_DEFER({ fclose(file); });
-        fwrite(writer.buffer.data(), 1, writer.buffer.size(), file);
+        if (iter->second->Cook(jobContext))
+        {
+            // write dependencies
+            auto dependencyPath = metaAsset->project->dependencyPath / fmt::format("{}.d", metaAsset->guid);
+            skr_json_writer_t writer(2);
+            writer.StartObject();
+            writer.Key("files");
+            writer.StartArray();
+            for (auto& dep : jobContext->staticDependencies)
+                skr::json::Write<const skr_guid_t&>(&writer, dep);
+            writer.EndArray();
+            writer.EndObject();
+            auto file = fopen(dependencyPath.u8string().c_str(), "w");
+            if (!file)
+            {
+                SKR_LOG_FMT_ERROR("[CookTask] failed to write dependency file for resource {}! path: {}", metaAsset->guid, metaAsset->path.u8string());
+                return;
+            }
+            SKR_DEFER({ fclose(file); });
+            fwrite(writer.buffer.data(), 1, writer.buffer.size(), file);
+        }
     };
     auto TearDownTask = +[](ftl::TaskScheduler* scheduler, void* userdata) {
         SCookContext* jobContext = (SCookContext*)userdata;
         auto system = GetCookSystem();
         system->scheduler.WaitForCounter(jobContext->counter.get());
         auto guid = jobContext->record->guid;
-        {
-            SMutexLock lock(system->taskMutex);
-            system->cooking.erase(guid);
-        }
-        SkrDelete(jobContext);
+        system->cooking.erase_if(guid, [](SCookContext* context) { SkrDelete(context); return true; });
+        system->mainCounter.Decrement();
     };
+    mainCounter.Add(1);
     scheduler.AddTask({ Task, jobContext }, ftl::TaskPriority::Normal, counter.get());
     scheduler.AddTask({ TearDownTask, jobContext }, ftl::TaskPriority::Normal);
     return counter;
@@ -148,10 +161,12 @@ void SCookSystem::UnregisterCooker(skr_guid_t guid)
 eastl::shared_ptr<ftl::TaskCounter> SCookSystem::EnsureCooked(skr_guid_t guid)
 {
     {
-        SMutexLock lock(taskMutex);
-        auto iter = cooking.find(guid);
-        if (iter != cooking.end())
-            return iter->second->counter;
+        eastl::shared_ptr<ftl::TaskCounter> result;
+        cooking.if_contains(guid, [&](SCookContext* ctx) {
+            result = ctx->counter;
+        });
+        if (result)
+            return result;
     }
     auto registry = GetAssetRegistry();
     auto metaAsset = registry->GetAssetRecord(guid);

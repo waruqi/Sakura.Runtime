@@ -99,6 +99,11 @@ bool SConfigCooker::Cook(SCookContext* ctx)
     skr::resource::SConfigFactory::Serialize(*resource, archive);
     //------save resource to disk
     auto file = fopen(ctx->output.u8string().c_str(), "wb");
+    if (!file)
+    {
+        SKR_LOG_FMT_ERROR("[SConfigCooker::Cook] failed to write cooked file for resource {}! path: {}", ctx->record->guid, ctx->record->path.u8string());
+        return false;
+    }
     SKR_DEFER({ fclose(file); });
     fwrite(buffer.data(), 1, buffer.size(), file);
     return true;
