@@ -148,17 +148,15 @@ eastl::shared_ptr<ftl::TaskCounter> SCookSystem::AddCookTask(skr_guid_t guid)
             fwrite(writer.buffer.data(), 1, writer.buffer.size(), file);
         }
     };
-    auto TearDownTask = +[](ftl::TaskScheduler* scheduler, void* userdata) {
+    auto TearDownTask = +[](void* userdata) {
         SCookContext* jobContext = (SCookContext*)userdata;
         auto system = GetCookSystem();
-        system->scheduler->WaitForCounter(jobContext->counter.get());
         auto guid = jobContext->record->guid;
         system->cooking.erase_if(guid, [](SCookContext* context) { SkrDelete(context); return true; });
         system->mainCounter->Decrement();
     };
     mainCounter->Add(1);
-    scheduler->AddTask({ Task, jobContext }, ftl::TaskPriority::Normal, counter.get());
-    scheduler->AddTask({ TearDownTask, jobContext }, ftl::TaskPriority::Normal);
+    scheduler->AddTask({ Task, jobContext, TearDownTask }, ftl::TaskPriority::Normal, counter.get());
     return counter;
 }
 
