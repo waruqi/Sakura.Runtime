@@ -13,7 +13,7 @@ jobs:
       lfs: 'true'
    - uses: xmake-io/github-action-setup-xmake@v1
      with:
-      xmake-version: latest
+      xmake-version: dev
    - name: Set env
      id: env
      run: |
@@ -49,6 +49,6 @@ jobs:
      shell: cmd
      run: |
         xmake f -m release -y -c -v --build_tests=n
-        xmake -y -v
+        xmake -y -vD
      env:
         VULKAN_SDK: ${{steps.env.outputs.VULKAN_SDK}}
