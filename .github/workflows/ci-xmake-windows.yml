@@ -13,7 +13,7 @@ jobs:
       lfs: 'true'
    - uses: xmake-io/github-action-setup-xmake@v1
      with:
-      xmake-version: latest
+      xmake-version: branch@dev
    - name: Set env
      id: env
      run: |
